@@ -4,28 +4,26 @@ import { string, number } from 'yup';
 
 interface QrCodePixParams {
     version: string;
-    key: string;
     city: string;
     name: string;
     value?: number;
     transactionId?: string;
-    message?: string;
-    cep?: string;
+    urlPayload: string;
     currency?: number;
+    repeatPayment?: boolean;
     countryCode?: string;
 }
 
 function QrCodePix({
     version,
-    key,
     city,
     name,
     value,
-    message,
-    cep,
+    urlPayload,
     transactionId = '***',
     currency = 986,
     countryCode = 'BR',
+    repeatPayment = false
 }: QrCodePixParams) {
     string().equals(['01'], 'Version not supported').validateSync(version);
 
@@ -35,8 +33,6 @@ function QrCodePix({
         .nullable()
         .validateSync(countryCode);
 
-    string().min(8, 'cep: 8 characters').max(8, 'cep: 8 characters').nullable().validateSync(cep);
-
     if (String(value) === '0') {
         value = undefined;
     }
@@ -45,11 +41,12 @@ function QrCodePix({
 
     string().max(25, 'transactionId: max 25 characters').nullable().validateSync(transactionId);
 
-    const payloadKeyString = generateKey(key, message);
+    const merchantAccount = generateMerchantAccount(urlPayload);
 
     const payload: string[] = [
         genEMV('00', version),
-        genEMV('26', payloadKeyString),
+        genEMV('01', repeatPayment ? '11' : '12'),
+        genEMV('26', merchantAccount),
         genEMV('52', '0000'),
         genEMV('53', String(currency)),
     ];
@@ -74,10 +71,6 @@ function QrCodePix({
     payload.push(genEMV('59', name));
     payload.push(genEMV('60', city));
 
-    if (cep) {
-        payload.push(genEMV('61', cep));
-    }
-
     payload.push(genEMV('62', genEMV('05', transactionId)));
 
     payload.push('6304');
@@ -96,11 +89,9 @@ function QrCodePix({
     };
 }
 
-function generateKey(key: string, message?: string): string {
-    const payload: string[] = [genEMV('00', 'BR.GOV.BCB.PIX'), genEMV('01', key)];
-    if (message) {
-        payload.push(genEMV('02', message));
-    }
+function generateMerchantAccount(urlPayload: string): string {
+    const payload: string[] = [genEMV('00', 'BR.GOV.BCB.PIX'), genEMV('25', urlPayload)];
+    
     return payload.join('');
 }
 
